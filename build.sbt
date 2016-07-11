@@ -74,11 +74,11 @@ lazy val commonSettings = Seq(
 
 lazy val core = (crossProject.crossType(CrossType.Pure) in file("core"))
   .jsConfigure(_ enablePlugins ScalaJSPlay)
-  .jsSettings(sourceMapsBase := baseDirectory.value / "..",  scalaVersion := "2.11.7")
+  .jsSettings(sourceMapsBase := baseDirectory.value / "..",  scalaVersion := "2.11.8")
   .settings(commonSettings: _*)
   .settings(
     name := "core",
-    scalaVersion := "2.11.7",
+    scalaVersion := "2.11.8",
     libraryDependencies ++= Seq(
       "org.typelevel" %%% "cats-core" % cats,
       "org.typelevel" %%% "cats-free" % cats,
@@ -100,13 +100,13 @@ lazy val cats = "0.6.0"
 
 lazy val server = (project in file("server"))
   .aggregate(clients.map(projectToRef): _*)
-  .dependsOn(core.jvm, runtime)
+  .dependsOn(core.jvm)
   .enablePlugins(PlayScala)
   .settings(commonSettings: _*)
   .settings(
     routesGenerator := InjectedRoutesGenerator,
     routesImport += "config.Routes._",
-    scalaVersion := "2.11.7",
+    scalaVersion := "2.11.8",
     scalaJSProjects := clients,
     pipelineStages := Seq(scalaJSProd, gzip),
   libraryDependencies ++= Seq(
@@ -118,7 +118,8 @@ lazy val server = (project in file("server"))
       "org.scala-exercises" %% "exercises-stdlib" % version.value changing(),
       "org.scala-exercises" %% "exercises-cats" % version.value changing(),
       "org.scala-exercises" %% "exercises-shapeless" % version.value changing(),
-     // "org.scala-exercises" %% "runtime" % version.value changing(),
+      "org.scala-exercises" %% "exercises-doobie" % version.value changing(),
+      "org.scala-exercises" %% "runtime" % version.value changing(),
       "org.slf4j" % "slf4j-nop" % "1.6.4",
       "org.postgresql" % "postgresql" % "9.3-1102-jdbc41",
       "com.vmunier" %% "play-scalajs-scripts" % "0.2.1",
@@ -147,7 +148,7 @@ lazy val client = (project in file("client"))
   .enablePlugins(ScalaJSPlugin, ScalaJSPlay)
   .settings(commonSettings: _*)
   .settings(
-    scalaVersion := "2.11.7",
+    scalaVersion := "2.11.8",
     persistLauncher := true,
     persistLauncher in Test := false,
     sourceMapsDirectories += core.js.base / "..",
@@ -176,7 +177,7 @@ lazy val definitions = (project in file("definitions"))
   .settings(commonSettings: _*)
   .settings(
     name := "definitions",
-    scalaVersion := "2.11.7",
+    scalaVersion := "2.11.8",
     libraryDependencies ++= Seq(
       "org.typelevel" %% "cats-core" % cats,
       "org.scalatest" %% "scalatest" % "2.2.4",
@@ -191,7 +192,7 @@ lazy val runtime = (project in file("runtime"))
   .settings(commonSettings:_*)
   .settings(
     name := "runtime",
-    scalaVersion := "2.11.7",
+    scalaVersion := "2.11.8",
     libraryDependencies ++= Seq(
       "org.clapper" %% "classutil" % "1.0.11",
       "com.twitter" %% "util-eval" % "6.34.0",
@@ -207,7 +208,7 @@ lazy val compiler = (project in file("compiler"))
   .settings(commonSettings:_*)
   .settings(
     name := "exercise-compiler",
-    scalaVersion := "2.11.7",
+    scalaVersion := "2.11.8",
     exportJars := true,
     libraryDependencies ++= Seq(
       "org.scalariform" %% "scalariform" % "0.1.8",
