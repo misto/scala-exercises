@@ -115,6 +115,7 @@ lazy val server = (project in file("server"))
       evolutions,
       cache,
     ws,
+      "org.scala-exercises" %% "exercises-intro" % version.value changing(),
       "org.scala-exercises" %% "exercises-stdlib" % version.value changing(),
       "org.scala-exercises" %% "exercises-cats" % version.value changing(),
       "org.scala-exercises" %% "exercises-shapeless" % version.value changing(),
