@@ -32,15 +32,6 @@ lazy val formattingSettings = SbtScalariform.scalariformSettings ++ Seq(
 )
 
 
-
-// `WARTING=false sbt` to drop into SBT w/ wart checking off
-lazy val warting = Try(sys.env("WARTING").toBoolean).getOrElse(true)
-
-def wartSettings =
-  if (warting)
-    Seq(wartremoverWarnings in Compile ++= Warts.unsafe)
-  else Nil
-
 lazy val commonSettings = Seq(
   organization := "org.scala-exercises",
   version := "0.2.2-SNAPSHOT",
@@ -68,7 +59,7 @@ lazy val commonSettings = Seq(
           |
           |""".stripMargin)
   )}
-) ++ formattingSettings ++ publishSettings ++ wartSettings
+) ++ formattingSettings ++ publishSettings
 
 // Purely functional core
 
@@ -102,8 +93,10 @@ lazy val server = (project in file("server"))
   .aggregate(clients.map(projectToRef): _*)
   .dependsOn(core.jvm)
   .enablePlugins(PlayScala)
+  .enablePlugins(DockerPlugin)
   .settings(commonSettings: _*)
   .settings(
+    EclipseKeys.skipParents in ThisBuild := false,
     routesGenerator := InjectedRoutesGenerator,
     routesImport += "config.Routes._",
     scalaVersion := "2.11.7",
@@ -116,10 +109,9 @@ lazy val server = (project in file("server"))
       cache,
     ws,
       "org.scala-exercises" %% "exercises-intro" % version.value changing(),
-      "org.scala-exercises" %% "exercises-stdlib" % version.value changing(),
-      "org.scala-exercises" %% "exercises-cats" % version.value changing(),
-      "org.scala-exercises" %% "exercises-shapeless" % version.value changing(),
-     // "org.scala-exercises" %% "runtime" % version.value changing(),
+      //"org.scala-exercises" %% "exercises-stdlib" % version.value changing(),
+      //"org.scala-exercises" %% "exercises-cats" % version.value changing(),
+      //"org.scala-exercises" %% "exercises-shapeless" % version.value changing(),
       "org.scala-exercises" %% "runtime" % version.value changing(),
       "org.slf4j" % "slf4j-nop" % "1.6.4",
       "org.postgresql" % "postgresql" % "9.3-1102-jdbc41",
@@ -142,7 +134,8 @@ lazy val server = (project in file("server"))
       "org.scalacheck" %% "scalacheck" % "1.12.5" % "test",
       "com.github.alexarchambault" %% "scalacheck-shapeless_1.12" % "0.3.1" % "test",
       "org.tpolecat" %% "doobie-contrib-specs2" % doobieVersion % "test",
-    compilerPlugin("org.spire-math" %% "kind-projector" % "0.7.1")))
+    compilerPlugin("org.spire-math" %% "kind-projector" % "0.7.1")),
+    packageName in Docker := "misto/scala-exercises")
 
 lazy val client = (project in file("client"))
   .dependsOn(core.js)
