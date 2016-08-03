@@ -2,11 +2,11 @@
 
 <li class="dropdown" id="loggedUser">
   <a href="#" class="dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-    @user.name.get.substring(10)&hellip;
+    @user.login.substring(0, 10)&hellip;
     <span class="caret"></span>
   </a>
   <ul class="dropdown-menu">
-    <li><a href="/logout">Logout</a>
+    <li><a href="/logout">Reset</a>
     </li>
   </ul>
 </li>
