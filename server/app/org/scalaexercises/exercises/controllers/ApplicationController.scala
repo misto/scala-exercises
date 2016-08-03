@@ -37,6 +37,7 @@ import scala.concurrent.Future
 import scala.concurrent.duration._
 import scalaz.concurrent.Task
 import org.scalaexercises.exercises.services.interpreters.FreeExtensions._
+import org.scalaexercises.types.user.UserCreation
 
 class ApplicationController(cache: CacheApi)(
     implicit
@@ -72,21 +73,30 @@ class ApplicationController(cache: CacheApi)(
   def index = Secure(Action.async { implicit request ⇒
 
     val ops = for {
-      authorize ← githubOps.getAuthorizeUrl(OAuth2.githubAuthId, OAuth2.callbackUrl)
       libraries ← exerciseOps.getLibraries.map(ExercisesService.reorderLibraries(topLibraries, _))
       user ← userOps.getUserByLogin(request.session.get("user").getOrElse(""))
       progress ← userProgressOps.fetchMaybeUserProgress(user)
-    } yield (libraries, user, request.session.get("oauth-token"), progress, authorize)
+    } yield (libraries, user, progress)
 
     for {
       repo ← scalaexercisesRepo
-      result ← ops.runFuture map {
-        case Xor.Right((libraries, user, Some(token), progress, _))  ⇒ Ok(views.html.templates.home.index(user = user, libraries = libraries, progress = progress, repo = repo))
-        case Xor.Right((libraries, None, None, progress, authorize)) ⇒ Ok(views.html.templates.home.index(user = None, libraries = libraries, progress = progress, redirectUrl = Option(authorize.url), repo = repo)).withSession("oauth-state" → authorize.state)
-        case Xor.Right((libraries, Some(user), None, _, _))          ⇒ InternalServerError("Session token not found")
+      result ← ops.runFuture flatMap {
+        case Xor.Right((libraries, Some(user), progress)) ⇒
+          Future.successful(Ok(views.html.templates.home.index(user = Some(user), libraries = libraries, progress = progress, repo = repo)))
+        case Xor.Right((libraries, None, progress)) ⇒
+          Logger.warn("No user found, creating new one")
+          userOps.createUser(createUserRequest()).runFuture.map {
+            case Xor.Right(Xor.Right(user)) ⇒
+
+              Ok(views.html.templates.home.index(user = Some(user), libraries = libraries, progress = progress, repo = repo)).withSession("user" → user.login)
+
+            case _ ⇒ {
+              InternalServerError("Failed to save user information")
+            }
+          }
         case Xor.Left(ex) ⇒ {
           Logger.error("Error rendering index page", ex)
-          InternalServerError(ex.getMessage)
+          Future.successful(InternalServerError(ex.getMessage))
         }
       }
     } yield result
@@ -116,16 +126,15 @@ class ApplicationController(cache: CacheApi)(
 
   def section(libraryName: String, sectionName: String) = Secure(Action.async { implicit request ⇒
     val ops = for {
-      authorize ← githubOps.getAuthorizeUrl(OAuth2.githubAuthId, OAuth2.callbackUrl)
       library ← exerciseOps.getLibrary(libraryName)
       section ← exerciseOps.getSection(libraryName, sectionName)
       contributors = toContributors(section.fold(List.empty[Contribution])(s ⇒ s.contributions))
       user ← userOps.getUserByLogin(request.session.get("user").getOrElse(""))
       libProgress ← userProgressOps.fetchMaybeUserProgressByLibrary(user, libraryName)
-    } yield (library, section, user, request.session.get("oauth-token"), libProgress, authorize, contributors)
+    } yield (library, section, user, libProgress, contributors)
 
     ops.runFuture map {
-      case Xor.Right((Some(l), Some(s), user, Some(token), libProgress, _, contributors)) ⇒ {
+      case Xor.Right((Some(l), Some(s), user, libProgress, contributors)) ⇒ {
         Ok(
           views.html.templates.library.index(
             library = l,
@@ -136,21 +145,9 @@ class ApplicationController(cache: CacheApi)(
           )
         )
       }
-      case Xor.Right((Some(l), Some(s), user, None, libProgress, authorize, contributors)) ⇒ {
-        Ok(
-          views.html.templates.library.index(
-            library = l,
-            section = s,
-            user = user,
-            progress = libProgress,
-            redirectUrl = Option(authorize.url),
-            contributors = contributors
-          )
-        ).withSession("oauth-state" → authorize.state)
-      }
-      case Xor.Right((Some(l), None, _, _, _, _, _)) ⇒ NotFound("Section not found")
-      case Xor.Right((None, _, _, _, _, _, _))       ⇒ NotFound("Library not found")
-      case Xor.Right((_, _, _, _, _, _, _))          ⇒ InternalServerError("Library and section not found")
+      case Xor.Right((Some(l), None, _, _, _)) ⇒ NotFound("Section not found")
+      case Xor.Right((None, _, _, _, _))       ⇒ NotFound("Library not found")
+      case Xor.Right((_, _, _, _, _))          ⇒ InternalServerError("Library and section not found")
       case Xor.Left(ex) ⇒ {
         Logger.error(s"Error rendering section: $libraryName/$sectionName", ex)
         InternalServerError(ex.getMessage)
@@ -173,5 +170,17 @@ class ApplicationController(cache: CacheApi)(
     .keys
     .map { case (author, authorUrl, avatarUrl) ⇒ Contributor(author, authorUrl, avatarUrl) }
     .toList
+
+  private def createUserRequest(): UserCreation.Request = {
+    val login = UUID.randomUUID().toString
+    UserCreation.Request(
+      login = login,
+      name = None,
+      githubId = login,
+      pictureUrl = "",
+      githubUrl = "",
+      email = None
+    )
+  }
 
 }
