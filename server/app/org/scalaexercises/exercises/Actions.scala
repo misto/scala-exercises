@@ -13,30 +13,7 @@ import play.api.Logger
 
 case class Secure[A](action: Action[A]) extends Action[A] {
   def apply(request: Request[A]): Future[Result] = {
-
-    println("Request from domain: " + request.domain)
-
-    val inWWW = request.domain.startsWith("www.")
-    val previewApp = request.domain.startsWith("scala-exercises-pr")
-    /** Behing load balancers request.secure will be false **/
-    val isSecure = request.headers.get("x-forwarded-proto").getOrElse("").contains("https") || request.secure
-
-    val redirect =
-      (!previewApp && Play.isProd && (!isSecure || !inWWW))
-
-    if (redirect) {
-      val secureUrl =
-        if (inWWW) s"https://${request.domain}${request.uri}"
-        else s"https://www.${request.domain}${request.uri}"
-
-      Future.successful(
-        Results.MovedPermanently(secureUrl).withHeaders(
-          "Strict-Transport-Security" → "max-age=31536000" // tells browsers to request the site URLs through HTTPS
-        )
-      )
-    } else {
-      action(request)
-    }
+    action(request)
   }
 
   lazy val parser = action.parser
