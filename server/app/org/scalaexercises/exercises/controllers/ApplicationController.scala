@@ -38,6 +38,7 @@ import scala.concurrent.duration._
 import scalaz.concurrent.Task
 import org.scalaexercises.exercises.services.interpreters.FreeExtensions._
 import org.scalaexercises.types.user.UserCreation
+import org.scalaexercises.types.user.User
 
 class ApplicationController(cache: CacheApi)(
     implicit
@@ -70,11 +71,24 @@ class ApplicationController(cache: CacheApi)(
     }
   }
 
+  private[this] def getUser()(implicit request: Request[AnyContent]): Free[ExercisesApp, Option[User]] = {
+    val user = userOps.getUserByLogin(request.session.get("user").getOrElse(""))
+    user.flatMap {
+      case Some(user) ⇒ Free.pure(Some(user))
+      case None ⇒
+        userOps.createUser(createUserRequest()).map {
+          case Xor.Right(user) ⇒
+            Some(user)
+          case _ ⇒ None
+        }
+    }
+  }
+
   def index = Secure(Action.async { implicit request ⇒
 
     val ops = for {
       libraries ← exerciseOps.getLibraries.map(ExercisesService.reorderLibraries(topLibraries, _))
-      user ← userOps.getUserByLogin(request.session.get("user").getOrElse(""))
+      user ← getUser()
       progress ← userProgressOps.fetchMaybeUserProgress(user)
     } yield (libraries, user, progress)
 
@@ -82,7 +96,9 @@ class ApplicationController(cache: CacheApi)(
       repo ← scalaexercisesRepo
       result ← ops.runFuture flatMap {
         case Xor.Right((libraries, Some(user), progress)) ⇒
-          Future.successful(Ok(views.html.templates.home.index(user = Some(user), libraries = libraries, progress = progress, repo = repo)))
+          Future.successful(
+            Ok(views.html.templates.home.index(user = Some(user), libraries = libraries, progress = progress, repo = repo)).withSession("user" → user.login)
+          )
         case Xor.Right((libraries, None, progress)) ⇒
           Logger.warn("No user found, creating new one")
           userOps.createUser(createUserRequest()).runFuture.map {
@@ -105,7 +121,7 @@ class ApplicationController(cache: CacheApi)(
   def library(libraryName: String) = Secure(Action.async { implicit request ⇒
     val ops = for {
       library ← exerciseOps.getLibrary(libraryName)
-      user ← userOps.getUserByLogin(request.session.get("user").getOrElse(""))
+      user ← getUser()
       section ← user.fold(
         Free.pure(None): Free[ExercisesApp, Option[String]]
       )(usr ⇒ userProgressOps.getLastSeenSection(usr, libraryName))
@@ -129,7 +145,7 @@ class ApplicationController(cache: CacheApi)(
       library ← exerciseOps.getLibrary(libraryName)
       section ← exerciseOps.getSection(libraryName, sectionName)
       contributors = toContributors(section.fold(List.empty[Contribution])(s ⇒ s.contributions))
-      user ← userOps.getUserByLogin(request.session.get("user").getOrElse(""))
+      user ← getUser()
       libProgress ← userProgressOps.fetchMaybeUserProgressByLibrary(user, libraryName)
     } yield (library, section, user, libProgress, contributors)
 
